@@ -242,7 +242,7 @@ export const CustomCalculator: React.FC<CustomCalculatorProps> = ({ onAddToCart 
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-[#2c3e50] outline-none font-medium"
                   >
                     <option value="">تعرف تلقائي من كود المنتج</option>
-                    {DISCOUNT_RULES_METADATA.map((rule) => (
+                    {DISCOUNT_RULES_METADATA.filter((rule, index, self) => index === self.findIndex((t) => t.family === rule.family)).map((rule) => (
                       <option key={rule.family} value={rule.family}>
                         {rule.nameAr} - خصم {(rule.discountRate * 100).toFixed((rule.discountRate * 100) % 1 === 0 ? 0 : 1)}%
                       </option>
