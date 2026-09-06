@@ -3,6 +3,7 @@ import path from 'path';
 import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
+import multer from 'multer';
 import { ALL_CALCULATED_PRODUCTS, searchProducts, getProductByReference } from './src/data/productCatalog';
 import { calculateProductPrice } from './src/data/discountCalculator';
 import { DISCOUNT_RULES_METADATA } from './src/data/discountCalculator';
@@ -26,6 +27,94 @@ async function startServer() {
   // API 1: Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', totalProducts: ALL_CALCULATED_PRODUCTS.length });
+  });
+
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
+
+  // API: Document Pricing
+  app.post('/api/price-document', upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded' });
+      }
+
+      const gemini = getGeminiClient();
+      if (!gemini) {
+        return res.status(500).json({ success: false, message: 'Gemini API Key is not configured' });
+      }
+
+      const mimeType = req.file.mimetype;
+      const base64Data = req.file.buffer.toString('base64');
+
+      const miniCatalog = ALL_CALCULATED_PRODUCTS.map(p => `${p.reference}|${p.description}`).join('\n');
+      const systemPrompt = `أنت مهندس تسعير ومستشار فني لمنتجات شنايدر إلكتريك.
+مرفق لك مستند (صورة أو نص) يحتوي على مقايسة أو طلبية.
+مهمتك:
+1. استخراج المنتجات المطلوبة والكميات.
+2. البحث في "الكتالوج المرفق" أدناه عن أقرب كود (Reference) يطابق المواصفات الفنية المكتوبة. استخدم خبرتك لربط المواصفات بالاكواد.
+3. إذا لم تجد منتجاً مطابقاً، ضع reference: null.
+
+النتيجة يجب أن تكون مصفوفة JSON فقط بالشكل التالي:
+[
+  { "originalText": "اسم المنتج كما ورد في المستند", "reference": "كود المنتج من الكتالوج أو null", "quantity": 1 }
+]
+يمنع كتابة أي نص إضافي أو شروحات. فقط الـ JSON Array.
+
+الكتالوج (Reference|Description):
+${miniCatalog}`;
+
+      const response = await gemini.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: systemPrompt },
+              { inlineData: { data: base64Data, mimeType } }
+            ]
+          }
+        ]
+      });
+
+      let aiText = response.text || '';
+      aiText = aiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
+
+      try {
+        const extractedItems = JSON.parse(aiText);
+        
+        const results = extractedItems.map((item: any) => {
+           let matchedProduct = null;
+           
+           if (item.reference) {
+             matchedProduct = getProductByReference(item.reference);
+           }
+           
+           // Fallback to strict search if AI couldn't find a reference
+           if (!matchedProduct && item.originalText && typeof item.originalText === 'string') {
+             const searchResults = searchProducts(item.originalText, 1);
+             if (searchResults && searchResults.length > 0) {
+               matchedProduct = searchResults[0];
+             }
+           }
+
+           return {
+             originalText: item.originalText,
+             reference: matchedProduct?.reference || item.reference || null,
+             quantity: item.quantity || 1,
+             matchedProduct
+           };
+        });
+
+        res.json({ success: true, items: results });
+      } catch (parseErr) {
+        console.error('JSON Parse error from Gemini:', aiText);
+        res.status(500).json({ success: false, message: 'فشل في تحليل الرد من المساعد الذكي. الرجاء المحاولة مرة أخرى بصورة أوضح.' });
+      }
+
+    } catch (err: any) {
+      console.error('Document pricing error:', err);
+      res.status(500).json({ success: false, message: err?.message || 'Error processing document' });
+    }
   });
 
   // API 2: Product Search
@@ -79,7 +168,7 @@ async function startServer() {
     res.json({ success: true, rules: DISCOUNT_RULES_METADATA });
   });
 
-  // API 6: Intelligent Assistant Chat (Query parsing with catalog matching + AI explanations)
+  // API 6: Intelligent Assistant Chat (Native Thinking with Full Catalog Context)
   app.post('/api/chat', async (req, res) => {
     try {
       const { message, conversationHistory } = req.body;
@@ -87,57 +176,40 @@ async function startServer() {
         return res.status(400).json({ success: false, message: 'Message is required' });
       }
 
-      // Step 1: Search database for candidates
-      const searchResults = searchProducts(message, 15);
-
-      // Step 2: If Gemini API is configured, use it with grounded context for rich natural responses
       const gemini = getGeminiClient();
       let aiResponseText = '';
 
       if (gemini) {
-        const catalogContext = searchResults.slice(0, 10).map(p => 
-          `- الكود (Reference): ${p.reference} | الوصف: ${p.description} | الفئة: ${p.categoryAr} (${p.family}) | السعر الرسمي: ${p.listPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م | نسبة الخصم: ${(p.discountRate * 100).toFixed((p.discountRate * 100) % 1 === 0 ? 0 : 1)}% | السعر بعد الخصم (قبل الضريبة): ${p.priceBeforeVat.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م | السعر النهائي شامل ضريبة القيمة المضافة 14%: ${p.finalNetPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م`
+        // Build a highly compressed version of the ENTIRE catalog to feed into Gemini's context window
+        // Format: REF | DESC | PRICE_EGP | DISCOUNT_RATE | FINAL_NET_EGP
+        const fullCatalogContext = ALL_CALCULATED_PRODUCTS.map(p => 
+          `${p.reference}|${p.description}|${p.family}|${p.listPrice}|${(p.discountRate*100).toFixed(1)}%|${p.finalNetPrice.toFixed(0)}`
         ).join('\n');
 
         const systemPrompt = `أنت مساعد خبير ومستشار تسعير معتمد لمنتجات شنايدر إلكتريك (Schneider Electric) في مصر.
+أنت تتمتع بقدرة على التفكير والاستنتاج. العميل قد يستخدم مصطلحات عامية (مثل: مفتاح، فاز، امبير، كونتاكتور، انفرتر).
+عليك استنتاج ما يقصده العميل، والبحث في قاعدة البيانات الكاملة المرفقة أدناه للعثور على أقرب المنتجات المطابقة.
+
+قاعدة البيانات المرفقة تحتوي على جميع منتجاتنا بالصيغة التالية (مفصولة بعلامة |):
+الكود | الوصف الفني | العائلة | السعر الرسمي | نسبة الخصم | السعر النهائي بعد الخصم والضريبة
+
+بيانات الكتالوج بالكامل:
+${fullCatalogContext}
+
 مهمتك:
-1. الإجابة بدقة باللغة العربية على استفسارات العملاء عن المنتجات والأسعار والخصومات.
-2. لكل منتج يطلبه العميل، وضح بوضوح وبشكل منظم:
+1. استنتج طلب العميل وابحث في الكتالوج المرفق في هذا النص عن أفضل وأقرب المنتجات (مثلاً "مفتاح 10 امبير" قد يعني قاطع iC60N أو iK60N أو Easy9 10A).
+2. اعرض للعميل الخيارات المناسبة بشكل منظم جداً.
+3. لكل منتج تقترحه، وضح بوضوح:
    - كود المنتج (Reference)
-   - الوصف الكامل للمنتج
-   - السعر الرسمي في القائمة (List Price)
-   - نسبة الخصم المطبقة بالضبط
-   - السعر بعد تطبيق الخصم (قبل ضريبة القيمة المضافة)
-   - السعر النهائي شامل ضريبة 14% (Net Final Price with VAT)
-3. إذا طلب العميل منتجاً غير محدد بدقة، اعرض أمامه الخيارات الأكثر مطابقة مع أسعارها وخصوماتها.
-4. استخدم نبرة مهنية ومساعدة وواضحة.
-
-بيانات المنتجات المطابقة من قاعدة بيانات الأسعار الحالية:
-${catalogContext || 'لم يتم العثور على تطابق مباشر بالكلمات، قدم نصائح عن الأكواد الشائعة مثل Acti9 (A9F..), EasyPact (EZ9F..), TeSys (LC1D..), Altivar (ATV..)'}
-
-قواعد نسب الخصم المعتمدة المحدثة:
-- جميع اللوحات والكبائن (Spacial, Thalassa, Pragma, Kaedra, Disbo, Easy9 Enclosures, NSY): خصم 32.5%
-- قواطع ومكونات Acti9 iC60 / C120 / Compact NS>630A وأفياش PratiKa: خصم 34.5%
-- قواطع Compact NSX ومفاتيح عزل INS وبوادل ATS NSX: خصم 36%
-- قواطع هوائية MVS/NW/MTZ وقواطع مقولبة EasyPact CVS: خصم 40.5%
-- قواطع ومكونات Resi9 و Easy9 (ثنائي وثلاثي): خصم 39%
-- قواطع أحادية iK60 (10A إلى 40A): صافي محدد 182 ج.م شامل الضريبة
-- قواطع أحادية Resi9 (10A إلى 40A): صافي محدد 175 ج.م شامل الضريبة
-- قواطع Acti9 iK60 (ثنائي وثلاثي و50A/63A): خصم 30%
-- قواطع GoPact MCCB وبوادل GoMTS: خصم 32.5%
-- كونتاكتورات وقواطع محركات وأوفرلود TeSys D / GV2 / GV3 / TVS وحمايات EOCR: خصم 48%
-- كونتاكتورات TeSys Giga الحديثة: خصم 45%
-- أزرار إشارة وريليهات ومؤقتات صناعية Harmony & Zelio: خصم 45%
-- إنفرترات ومغيرات سرعة وسوفت ستارتر Altivar & ATS: خصم 45%
-- أنظمة تحكم Modicon PLC وشاشات HMI وباور سبلاي: خصم 45%
-- كونتاكتورات المكثفات لتحسين معامل القدرة: خصم 27%
-- عدادات الطاقة ومكثفات PowerLogic: خصم 24%
-- وشوش ومفاتيح وبرايز New Unica: خصم 20%
-- ضريبة القيمة المضافة المطبقة في مصر: 14%`;
+   - الوصف الكامل
+   - السعر الرسمي (List Price)
+   - السعر النهائي شامل الضريبة 14% (وهو الرقم الأخير في كل سطر في البيانات المرفقة).
+4. إذا لم تجد منتجاً مطابقاً بنسبة 100%، اقترح أقرب المنتجات المتاحة واشرح للعميل استنتاجك.
+5. تحدث بأسلوب مهني وواضح باللغة العربية.`;
 
         try {
           const response = await gemini.models.generateContent({
-            model: 'gemini-3.1-pro-preview',
+            model: 'gemini-2.5-flash',
             contents: [
               {
                 role: 'user',
@@ -151,23 +223,21 @@ ${catalogContext || 'لم يتم العثور على تطابق مباشر با�
         }
       }
 
-      // Fallback if no gemini key or gemini error: build rich rule-based Arabic response
+      // Fallback if no gemini key or gemini error
       if (!aiResponseText) {
+        // Fallback to basic search if Gemini fails
+        const searchResults = searchProducts(message, 5);
         if (searchResults.length > 0) {
           const top = searchResults[0];
-          aiResponseText = `تم العثور على منتجات مطابقة لطلبك:\n\n**${top.description}**\n- **كود المنتج (Reference):** \`${top.reference}\`\n- **الفئة:** ${top.categoryAr} (${top.family})\n- **السعر الرسمي (قائمة الأسعار):** ${top.listPrice.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م\n- **نسبة الخصم:** ${(top.discountRate * 100).toFixed(0)}%\n- **السعر بعد الخصم (قبل الضريبة):** ${top.priceBeforeVat.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م\n- **السعر النهائي (شامل ضريبة 14%):** ${top.finalNetPrice.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م`;
-          if (searchResults.length > 1) {
-            aiResponseText += `\n\nتوجد أيضاً ${searchResults.length - 1} نتائج أخرى مطابقة معروضة في قائمة المنتجات أدناه.`;
-          }
+          aiResponseText = `تم العثور على منتجات مطابقة لطلبك:\n\n**${top.description}**\n- **كود المنتج (Reference):** \`${top.reference}\`\n- **السعر النهائي (شامل ضريبة 14%):** ${top.finalNetPrice.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م`;
         } else {
-          aiResponseText = `لم يتم العثور على منتج مطابق بدقة لـ "${message}". يمكنك البحث برقم الكود (مثال: A9F74116 أو LC1D09M7 أو ATV310HU15N4E) أو بالوصف الفني (مثال: قاطع 16 امبير أو كونتاكتور 18A أو انفرتر 1.5 كيلو).`;
+          aiResponseText = `عذراً، لم أتمكن من العثور على طلبك بدقة ولا يمكنني الوصول لمحرك التفكير الذكي حالياً. يرجى البحث بالكود (Reference) تحديداً.`;
         }
       }
 
       res.json({
         success: true,
-        answer: aiResponseText,
-        matchedProducts: searchResults,
+        answer: aiResponseText
       });
     } catch (err: any) {
       console.error('Chat endpoint error:', err);

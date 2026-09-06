@@ -77,3 +77,9 @@ export interface ChatMessage {
   matchedProducts?: CalculatedProduct[];
   suggestedProducts?: CalculatedProduct[];
 }
+
+export interface DocumentExtractedItem {
+  originalText: string;
+  quantity: number;
+  matchedProduct: CalculatedProduct | null;
+}

@@ -6,12 +6,13 @@ import {
   Percent, 
   Bot, 
   Calculator,
-  ShoppingCart
+  ShoppingCart,
+  FileScan
 } from 'lucide-react';
 
 interface NavbarProps {
-  activeTab: 'search' | 'chat' | 'quotation' | 'custom' | 'rules';
-  setActiveTab: (tab: 'search' | 'chat' | 'quotation' | 'custom' | 'rules') => void;
+  activeTab: 'search' | 'chat' | 'quotation' | 'custom' | 'rules' | 'document';
+  setActiveTab: (tab: 'search' | 'chat' | 'quotation' | 'custom' | 'rules' | 'document') => void;
   cartCount: number;
   totalProductsCount: number;
 }
@@ -43,7 +44,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   قائمة الأسعار الذكية والخصومات
                 </span>
                 <span className="bg-white/20 text-white text-[11px] px-2 py-0.5 rounded-md font-semibold backdrop-blur-xs">
-                  2024
+                  2026
                 </span>
               </div>
               <p className="text-[11px] text-white/80 hidden md:block">
@@ -96,6 +97,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {cartCount}
                 </span>
               )}
+            </button>
+
+            <button
+              id="tab-document"
+              onClick={() => setActiveTab('document')}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                activeTab === 'document'
+                  ? 'bg-white text-[#2c3e50] shadow-sm'
+                  : 'text-white/90 hover:text-white hover:bg-white/15'
+              }`}
+            >
+              <FileScan className="w-4 h-4" />
+              <span className="hidden md:inline">تسعير المستندات</span>
             </button>
 
             <button

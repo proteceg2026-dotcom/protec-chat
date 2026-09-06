@@ -1,4 +1,6 @@
 import React from 'react';
+import { toPng } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 import { QuotationItem } from '../types';
 import { 
   Trash2, 
@@ -53,6 +55,44 @@ export const QuotationCart: React.FC<QuotationCartProps> = ({
     window.print();
   };
 
+  const handleExportPDF = async () => {
+    const element = document.getElementById('quotation-print-area');
+    if (!element) return;
+
+    try {
+      // Add a temporary class to hide buttons during export
+      element.classList.add('exporting-pdf');
+      
+      const filter = (node: HTMLElement) => {
+        return node.getAttribute?.('data-html2canvas-ignore') !== 'true';
+      };
+
+      const imgData = await toPng(element, { 
+        pixelRatio: 2,
+        filter: filter as any,
+        skipFonts: true
+      });
+      element.classList.remove('exporting-pdf');
+
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save('Schneider_Quotation.pdf');
+    } catch (error) {
+      console.error('Failed to export PDF:', error);
+      element.classList.remove('exporting-pdf');
+      alert('حدث خطأ أثناء تصدير ملف PDF');
+    }
+  };
+
   const handleCopySummary = () => {
     const text = items.map((item, index) => {
       const extraTxt = item.product.extraDiscountRate && item.product.extraDiscountRate > 0
@@ -90,7 +130,7 @@ export const QuotationCart: React.FC<QuotationCartProps> = ({
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div id="quotation-print-area" className="max-w-6xl mx-auto space-y-8 bg-gray-50 p-2 sm:p-6 rounded-3xl">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white border border-gray-200 p-5 rounded-2xl shadow-sm">
         <div>
@@ -103,13 +143,21 @@ export const QuotationCart: React.FC<QuotationCartProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap" data-html2canvas-ignore="true">
           <button
             onClick={handleCopySummary}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-gray-100 text-[#2c3e50] border border-gray-300 transition-all shadow-xs"
           >
             {copied ? <Check className="w-4 h-4 text-[#3dcd58]" /> : <Copy className="w-4 h-4 text-gray-600" />}
             <span>نسخ المقايسة</span>
+          </button>
+
+          <button
+            onClick={handleExportPDF}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#2c3e50] hover:bg-[#1a2530] text-white transition-all shadow-xs"
+          >
+            <Download className="w-4 h-4 text-white" />
+            <span>تصدير PDF</span>
           </button>
 
           <button
@@ -143,7 +191,7 @@ export const QuotationCart: React.FC<QuotationCartProps> = ({
                 <th className="p-4">السعر بعد الخصم</th>
                 <th className="p-4">الكمية</th>
                 <th className="p-4">الإجمالي الصافي</th>
-                <th className="p-4 text-center">إجراء</th>
+                <th className="p-4 text-center" data-html2canvas-ignore="true">إجراء</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -203,7 +251,7 @@ export const QuotationCart: React.FC<QuotationCartProps> = ({
                   <td className="p-4 font-mono-code font-bold text-sm text-[#2c3e50] whitespace-nowrap">
                     {formatEGP(item.product.finalNetPrice * item.quantity)} <span className="text-[10px] text-[#3dcd58] font-bold">ج.م</span>
                   </td>
-                  <td className="p-4 text-center whitespace-nowrap">
+                  <td className="p-4 text-center whitespace-nowrap" data-html2canvas-ignore="true">
                     <div className="flex items-center justify-center gap-1">
                       <button
                         onClick={() => handleCopyItem(item)}
@@ -242,7 +290,7 @@ export const QuotationCart: React.FC<QuotationCartProps> = ({
         <div className="bg-white border border-gray-200 rounded-2xl p-5 space-y-3 shadow-sm">
           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">ملاحظات العرض الرسمية</h4>
           <ul className="text-xs text-gray-600 space-y-2 list-disc list-inside leading-relaxed font-medium">
-            <li>الأسعار مستخرجة مباشرة من قائمة أسعار شنايدر إلكتريك الرسمية لعام 2024.</li>
+            <li>الأسعار مستخرجة مباشرة من قائمة أسعار شنايدر إلكتريك الرسمية لعام 2026.</li>
             <li>نسب الخصم مطبقة بدقة وفقاً للفئات المعتمدة (Acti9 36%, Easy9 44%, TeSys 36%, CVS 46%, etc.).</li>
             <li>الأسعار الإجمالية تتضمن ضريبة القيمة المضافة القانونية (14% VAT).</li>
           </ul>

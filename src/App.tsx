@@ -9,6 +9,7 @@ import { QuotationCart } from './components/QuotationCart';
 import { CustomCalculator } from './components/CustomCalculator';
 import { DiscountRulesView } from './components/DiscountRulesView';
 import { AiAssistant } from './components/AiAssistant';
+import { DocumentPricer } from './components/DocumentPricer';
 import { 
   Search, 
   Filter, 
@@ -26,7 +27,7 @@ import {
 } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'search' | 'chat' | 'quotation' | 'custom' | 'rules'>('search');
+  const [activeTab, setActiveTab] = useState<'search' | 'chat' | 'quotation' | 'custom' | 'rules' | 'document'>('search');
   const [searchQuery, setSearchQuery] = useState('');
   const [extraDiscountInput, setExtraDiscountInput] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
@@ -104,6 +105,25 @@ export const App: React.FC = () => {
       }
       return [...prev, { product, quantity: 1 }];
     });
+  };
+
+  const handleAddMultipleToCart = (items: { product: CalculatedProduct; quantity: number }[]) => {
+    setQuotationItems((prev) => {
+      const newCart = [...prev];
+      items.forEach((itemToAdd) => {
+        const existingIdx = newCart.findIndex((i) => i.product.reference === itemToAdd.product.reference);
+        if (existingIdx >= 0) {
+          newCart[existingIdx] = {
+            ...newCart[existingIdx],
+            quantity: newCart[existingIdx].quantity + itemToAdd.quantity,
+          };
+        } else {
+          newCart.push(itemToAdd);
+        }
+      });
+      return newCart;
+    });
+    setActiveTab('quotation');
   };
 
   const handleUpdateQuantity = (reference: string, newQty: number) => {
@@ -407,6 +427,11 @@ export const App: React.FC = () => {
             onAddToCart={handleAddToCart}
             onInspect={(p) => setSelectedProductForModal(p)}
           />
+        )}
+
+        {/* Tab: Document Pricer */}
+        {activeTab === 'document' && (
+          <DocumentPricer onAddMultipleToCart={handleAddMultipleToCart} />
         )}
 
         {/* Tab 3: Quotation / BOQ Cart */}
