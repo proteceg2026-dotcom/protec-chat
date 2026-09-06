@@ -1,0 +1,37 @@
+import { ProductItem } from '../types';
+
+export const PRODUCTS_PART_11: ProductItem[] = [
+  // Page 76 - PPCTR, PPLVS, PPUES
+  { reference: 'ZCT-120-Z', description: 'ZCT 120 M/M', family: 'PPCTR', price: 12354.30 },
+  { reference: 'NSYTRV352', description: 'Screw terminal 35 MM grey', family: 'PPLVS', price: 169.28 },
+  { reference: 'NSYTRV42PE', description: 'Screw terminal earth 4 mm green', family: 'PPLVS', price: 148.41 },
+  { reference: 'NSYTRV502', description: 'Screw terminal 50 mm grey', family: 'PPLVS', price: 335.78 },
+  { reference: 'NSY2SP206', description: '2 std side panels 2000x600', family: 'PPUES', price: 23266.71 },
+  { reference: 'NSY2SP208', description: '2 std side panels 2000x800', family: 'PPUES', price: 29607.03 },
+  { reference: 'NSY2SPN206', description: '2 side panel std 2000x600 RAL7035', family: 'PPUES', price: 23266.71 },
+  { reference: 'NSY2SPN208', description: '2 side panel std 2000x800 RAL7035', family: 'PPUES', price: 29607.03 },
+  { reference: 'NSYAMRD30357SB', description: 'Din 35x7,5 rail for box 300', family: 'PPUES', price: 115.92 },
+  { reference: 'NSYBP2010', description: 'Rear panel SF 2000x1000', family: 'PPUES', price: 25828.32 },
+  { reference: 'NSYBP2012', description: 'Rear panel SF 2000x1200', family: 'PPUES', price: 28559.75 },
+  { reference: 'NSYBP206', description: 'Rear panel SF 2000x600', family: 'PPUES', price: 18398.25 },
+  { reference: 'NSYBP208', description: 'Rear panel SF 2000x800', family: 'PPUES', price: 21200.45 },
+  { reference: 'NSYBPN2010', description: 'Rear panel 2000x1000 RAL7035', family: 'PPUES', price: 25828.32 },
+  { reference: 'NSYBPN2012', description: 'Rear panel 2000x1200 RAL7035', family: 'PPUES', price: 28559.75 },
+  { reference: 'NSYBPN206', description: 'Rear panel 2000x600 RAL7035', family: 'PPUES', price: 18398.25 },
+  { reference: 'NSYBPN208', description: 'Rear panel 2000x800 RAL7035', family: 'PPUES', price: 21200.45 },
+  { reference: 'NSYBSA', description: 'NSYBSA', family: 'PPUES', price: 3584.83 },
+  { reference: 'NSYCAG291LPF', description: 'Outlet Grid cut-out 291x29mm', family: 'PPUES', price: 3611.67 },
+  { reference: 'NSYCCOHYT230VID', description: 'Hygrotherm 230V', family: 'PPUES', price: 16081.13 },
+  { reference: 'NSYCCOTHC', description: 'SIM.THERMOSTAT', family: 'PPUES', price: 1073.93 },
+  { reference: 'NSYCCOTHD', description: 'Double Thermostat(NO NC)', family: 'PPUES', price: 2165.89 },
+  { reference: 'NSYCEP', description: 'Central fixing point', family: 'PPUES', price: 1642.80 },
+  { reference: 'NSYCRN252150', description: '20×25×15', family: 'PPUES', price: 4360.92 },
+  { reference: 'NSYCRN325150', description: '30×25×15', family: 'PPUES', price: 4978.35 },
+  { reference: 'NSYCRN325150P', description: '30×25×15', family: 'PPUES', price: 4971.42 },
+  { reference: 'NSYCRN325200', description: '30×25×20', family: 'PPUES', price: 5493.12 },
+  { reference: 'NSYCRN43150', description: '40×30×15', family: 'PPUES', price: 6121.65 },
+  { reference: 'NSYCRN43200', description: '40×30×20', family: 'PPUES', price: 6807.08 },
+  { reference: 'NSYCRN54200', description: '50×40×20', family: 'PPUES', price: 8663.55 },
+  { reference: 'NSYCRN64200', description: '60×40×20', family: 'PPUES', price: 9543.23 },
+  { reference: 'NSYCRN65200', description: '60×50×20', family: 'PPUES', price: 9877.62 }
+];

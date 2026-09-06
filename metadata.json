@@ -1,0 +1,8 @@
+{
+  "name": "Remix Schneider Electric Price \u0026 Discount Explorer2",
+  "description": "برنامج الاستعلام عن أسعار منتجات شنايدر إلكتريك الرسمية وحساب الخصم الصافي والضريبة",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
